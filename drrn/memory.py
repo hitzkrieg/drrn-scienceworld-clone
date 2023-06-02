@@ -4,7 +4,8 @@ import json
 import sys
 
 State = namedtuple('State', ('obs', 'description', 'inventory'))
-Transition = namedtuple('Transition', ('state', 'act', 'reward', 'next_state', 'next_acts', 'done'))
+# Transition = namedtuple('Transition', ('state', 'act', 'reward', 'next_state', 'next_acts', 'done'))
+Transition = namedtuple('Transition', ('state', 'act', 'reward', 'next_state', 'next_acts', 'done', 'act_cosine_sim', 'next_acts_cosine_sim'))
 
 
 def sample(rng: np.random.RandomState, data: list, k: int):

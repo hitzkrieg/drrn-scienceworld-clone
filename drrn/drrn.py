@@ -52,7 +52,12 @@ class DRRN_Agent:
         self.batch_size = args.batch_size
         self.sp = spm.SentencePieceProcessor()
         self.sp.Load(args.spm_path)
-        self.network = DRRN(len(self.sp), args.embedding_dim, args.hidden_dim).to(device)
+        if hasattr(args, 'pruning_strategy'):
+            self.use_soft_pruner = args.pruning_strategy == 'soft'
+        else:
+            self.use_soft_pruner = False
+
+        self.network = DRRN(len(self.sp), args.embedding_dim, args.hidden_dim, self.use_soft_pruner).to(device)
         ## self.memory = ReplayMemory(args.memory_size)     ## PJ: Changing to more memory efficient memory, since the pickle files are enormous
         self.memory = PrioritizedReplayMemory(capacity = args.memory_size, priority_fraction = args.priority_fraction)     ## PJ: Changing to more memory efficient memory, since the pickle files are enormous
         self.save_path = args.output_dir
@@ -64,9 +69,9 @@ class DRRN_Agent:
         self.lastSaveSuccessful = True
         self.numSaveErrors = 0
 
-    def observe(self, state, act, rew, next_state, next_acts, done):
+    def observe(self, state, act, rew, next_state, next_acts, done, act_cosine_sim = None, next_acts_cosine_sim = None):
         #self.memory.push(state, act, rew, next_state, next_acts, done)     # When using ReplayMemory
-        self.memory.push(False, state, act, rew, next_state, next_acts, done)       # When using PrioritizedReplayMemory (? PJ)
+        self.memory.push(False, state, act, rew, next_state, next_acts, done, act_cosine_sim, next_acts_cosine_sim)       # When using PrioritizedReplayMemory (? PJ)
 
 
     def build_state(self, obs, infos):
@@ -92,9 +97,12 @@ class DRRN_Agent:
         return [self.sp.EncodeAsIds(o) for o in obs_list]
 
 
-    def act(self, states, poss_acts, sample=True):
+    def act(self, states, poss_acts, poss_acts_cosine_sim_scores = None, sample=True):
         """ Returns a string action from poss_acts. """
-        idxs, values = self.network.act(states, poss_acts, sample)
+        if not self.use_soft_pruner and poss_acts_cosine_sim_scores:
+            raise NotImplementedError()
+        
+        idxs, values = self.network.act(states, poss_acts, poss_acts_cosine_sim_scores, sample)
         act_ids = [poss_acts[batch][idx] for batch, idx in enumerate(idxs)]
         return act_ids, idxs, values
 
@@ -108,7 +116,7 @@ class DRRN_Agent:
 
         # Compute Q(s', a') for all a'
         # TODO: Use a target network???
-        next_qvals = self.network(batch.next_state, batch.next_acts)
+        next_qvals = self.network(batch.next_state, batch.next_acts, batch.next_acts_cosine_sim)
         # Take the max over next q-values
         next_qvals = torch.tensor([vals.max() for vals in next_qvals], device=device)
         # Zero all the next_qvals that are done
@@ -117,8 +125,10 @@ class DRRN_Agent:
 
         # Next compute Q(s, a)
         # Nest each action in a list - so that it becomes the only admissible cmd
-        nested_acts = tuple([[a] for a in batch.act])
-        qvals = self.network(batch.state, nested_acts)
+        nested_acts = tuple([[a] for a in batch.act])        
+        nested_acts_cosine_sim = tuple([[act_cosine_sim] for act_cosine_sim in batch.act_cosine_sim])
+        qvals = self.network(batch.state, nested_acts, nested_acts_cosine_sim)
+
         # Combine the qvals: Maybe just do a greedy max for generality
         qvals = torch.cat(qvals)
 
