@@ -1,0 +1,15 @@
+#!/bin/sh
+#SBATCH --job-name=drrn-100_steps_train_with_eval_1_env
+#SBATCH -o logs_easy_limit_actions_to_gold/drrn-task-13-test_100_steps_train_with_eval_1_env/drrn-task-13_%j.txt
+#SBATCH --time=167:00:00
+#SBATCH --partition=gpu-long
+#SBATCH --gres=gpu:1
+#SBATCH --cpus-per-task=8
+#SBATCH --mem=40GB
+#SBATCH -d singleton
+#SBATCH --exclude=ials-gpu002
+
+export JAVA_HOME=/home/hgolchha_umass_edu/jre1.8.0_341
+export PATH=$JAVA_HOME/bin:$PATH
+
+python train-scienceworld-limit-actions-to-gold.py --num_envs=1 --max_steps=100 --task_idx=13 --priority_fraction=0.50 --memory_size=10000 --simplification_str=easy --env_step_limit=10 --eval_freq=55 --eval_set=test --output_dir=logs_easy_limit_actions_to_gold/drrn-task-13-test_100_steps_train_with_eval_1_env --historySavePrefix=logs_easy_limit_actions_to_gold/drrn-task-13-test_100_steps_train_with_eval_1_env/drrn-task13-results-seed0-test

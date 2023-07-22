@@ -1,13 +1,13 @@
 #!/bin/sh
 #SBATCH --job-name=train_drrn_scienceworld_task_easy_28
 #SBATCH -o logs_easy_100k/drrn-task-28_%j.txt
-#SBATCH --time=20:00:00
+#SBATCH --time=35:00:00
 #SBATCH --partition=gpu-long
 #SBATCH --gres=gpu:1
 #SBATCH --cpus-per-task=8
 #SBATCH --mem=40GB
 #SBATCH -d singleton
-#SBATCH --exclude=ials-gpu005
+#SBATCH --exclude=ials-gpu026,ials-gpu002
 
 export JAVA_HOME=/home/hgolchha_umass_edu/jre1.8.0_341
 export PATH=$JAVA_HOME/bin:$PATH
