@@ -29,7 +29,8 @@ class DRRN(torch.nn.Module):
         self.hidden       = nn.Linear(4*hidden_dim, hidden_dim)
         self.use_soft_pruner = use_soft_pruner
         if self.use_soft_pruner:
-            self.act_rescorer = torch.nn.Sequential(torch.nn.Linear(hidden_dim,1), torch.nn.Sigmoid())
+            # self.act_rescorer = torch.nn.Sequential(torch.nn.Linear(hidden_dim,1), torch.nn.Sigmoid())
+            self.act_rescorer = nn.Sequential(nn.Linear(2,2), nn.ReLU(), nn.Linear(2,1))
 
         self.act_scorer   = nn.Linear(hidden_dim, 1)
 
@@ -91,11 +92,11 @@ class DRRN(torch.nn.Module):
         z = F.relu(self.hidden(z))
         act_values = self.act_scorer(z).squeeze(-1)
         if self.use_soft_pruner:
-            rescore_weights = self.act_rescorer(z).squeeze(-1)
+            # rescore_weights = self.act_rescorer(z).squeeze(-1)
             # return act_values.split(act_sizes), rescore_weights.split(act_sizes)
-            predicted_act_values, rescore_weights =  act_values.split(act_sizes), rescore_weights.split(act_sizes)
-            act_cosine_sim_scores = [torch.tensor(act_cosine_sim_score, requires_grad=False).to(device) for act_cosine_sim_score in act_cosine_sim_scores]
-            act_values = [predicted_act_value*rescore_weight + (1-rescore_weight)*act_cosine_sim_score for predicted_act_value,act_cosine_sim_score, rescore_weight in zip(predicted_act_values, act_cosine_sim_scores, rescore_weights) ]
+            predicted_act_values = act_values.split(act_sizes)
+            act_cosine_sim_scores = [torch.tensor(act_cosine_sim_score, requires_grad=False, dtype=torch.float32).to(device) for act_cosine_sim_score in act_cosine_sim_scores] 
+            act_values = [self.act_rescorer(torch.cat((predicted_act_value.unsqueeze(1), act_cosine_sim_score.unsqueeze(1)), dim=1)).squeeze(1) for predicted_act_value,act_cosine_sim_score in zip(predicted_act_values, act_cosine_sim_scores) ]
             return act_values
         # Split up the q-values by batch
         return act_values.split(act_sizes)

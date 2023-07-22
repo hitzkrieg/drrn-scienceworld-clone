@@ -22,6 +22,8 @@ python train-scienceworld-limit-actions-by-pruner.py --num_envs=8 --max_steps=10
 
     4. Copy builder.py from (let's say 'Documents') to Lib/site-packages/google/protobuf/internal
     5. Run your code
+
+
 """
 
 import subprocess
@@ -40,6 +42,10 @@ from scienceworld import ScienceWorldEnv, BufferedHistorySaver
 from vec_env import resetWithVariation, resetWithVariationDev, resetWithVariationTest, initializeEnv, sanitizeInfo, sanitizeObservation
 from action_ranker import ActionScorer
 import numpy as np 
+import re
+
+navigation_regex = re.compile(r"(go|teleport)\ to.*")
+
 
 def configure_logger(log_dir):
     logger.configure(log_dir, format_strs=['log'])
@@ -56,7 +62,12 @@ def clean(strIn):
         strIn = strIn.replace(c, ' ')
     return strIn.strip()    
 
-
+def get_navigation_action_positions(actions):
+    """
+    To do: Also need to add ids?
+    """
+    navigation_action_positions = [i for i, action in enumerate(actions) if re.search(navigation_regex, action)]
+    return navigation_action_positions
 
 def evaluate(agent, args, env_step_limit, bufferedHistorySaverEval, extraSaveInfo, action_ranker_obj, nb_episodes=10):    
     # Initialize a ScienceWorld thread for serial evaluation
@@ -112,7 +123,7 @@ def evaluate_episode(agent, env, env_step_limit, simplificationStr, bufferedHist
 
     log('Obs{}: {} Inv: {} Desc: {}'.format(step, clean(ob), clean(info['inv']), clean(info['look'])))    
     while not done:
-        print("numSteps: " + str(numSteps))        
+        #print("numSteps: " + str(numSteps))        
         # valid_acts = info['valid']
         # valid_acts = list(set(info['valid']).intersection(gold_action_set)) 
 
@@ -120,9 +131,20 @@ def evaluate_episode(agent, env, env_step_limit, simplificationStr, bufferedHist
         task_description = info['taskDesc']
         cosine_similarities, normalized_scores, desc_sorting_indices, size_of_pruned_set = action_ranker_obj.score_actions(valid_acts, task_description)
 
-        if args.pruning_strategy == 'hard':
-            # valid_acts
-            valid_acts = np.asarray(valid_acts)[desc_sorting_indices][:size_of_pruned_set]
+        random_number = np.random.uniform()
+
+        if args.pruning_strategy == 'hard' and random_number > args.current_epsilon:
+            if args.prune_navigation_action:
+                # valid_acts
+                valid_acts = np.asarray(valid_acts)[desc_sorting_indices][:size_of_pruned_set]
+            else:
+                navigation_action_positions = get_navigation_action_positions(valid_acts)
+                reduced_actions_positions = np.asarray(list(set(navigation_action_positions).union(desc_sorting_indices[:size_of_pruned_set])))
+                valid_acts = np.asarray(valid_acts)[reduced_actions_positions]
+
+
+        
+        # Note: when args.pruning_strategy == 'hard', the values of cosine_similarities, normalized_scores, desc_sorting_indices have not been updated to a smaller length
 
         valid_ids = agent.encode(valid_acts)
         if args.pruning_strategy == 'soft':
@@ -143,7 +165,7 @@ def evaluate_episode(agent, env, env_step_limit, simplificationStr, bufferedHist
             numDisplayed += 1
             if (numDisplayed > maxToDisplay):
                 break
-
+ 
         log('Q-Values: {}'.format(s))
         ob, rew, done, info = env.step(action_str)
         info = sanitizeInfo(info)
@@ -191,18 +213,39 @@ def train(agent, envs, max_steps, update_freq, eval_freq, checkpoint_freq, log_f
 
     action_scores_list = map(action_ranker_obj.score_actions, valid_actions_list, task_description_list)
     cosine_similarities_list, normalized_scores_list, desc_sorting_indices_list, size_of_pruned_set_list = zip(*action_scores_list)
-    
-    if args.pruning_strategy == 'hard':
+
+    assert len(cosine_similarities_list) == len(normalized_scores_list) == len(desc_sorting_indices_list) == len(size_of_pruned_set_list)
+
+    navigation_action_positions_list = [get_navigation_action_positions(valid_actions) for valid_actions in valid_actions_list]
+    reduced_actions_positions_list = [np.asarray(list(set(navigation_action_positions_list[i]).union(desc_sorting_indices_list[i][:size_of_pruned_set_list[i]]))) for i in range(len(navigation_action_positions_list))]
+
+    random_number = np.random.uniform()
+
+    if args.pruning_strategy == 'hard' and random_number > args.current_epsilon:
         # Prepare reduced lists and make sure the mapping for scores are also updated.
-        valid_actions_list =  [np.asarray(valid_actions_list[i])[desc_sorting_indices_list[i]][:size_of_pruned_set_list[i]] for i in range(len(cosine_similarities_list))]
-        cosine_similarities_list =  [np.asarray(cosine_similarities_list[i])[desc_sorting_indices_list[i]][:size_of_pruned_set_list[i]] for i in range(len(cosine_similarities_list))]
-        normalized_scores_list =  [np.asarray(normalized_scores_list[i])[desc_sorting_indices_list[i]][:size_of_pruned_set_list[i]] for i in range(len(normalized_scores_list))]
+        if args.prune_navigation_action:
+            valid_actions_list =  [np.asarray(valid_actions_list[i])[desc_sorting_indices_list[i]][:size_of_pruned_set_list[i]] for i in range(len(valid_actions_list))]
+            cosine_similarities_list =  [np.asarray(cosine_similarities_list[i])[desc_sorting_indices_list[i]][:size_of_pruned_set_list[i]] for i in range(len(cosine_similarities_list))]
+            normalized_scores_list =  [np.asarray(normalized_scores_list[i])[desc_sorting_indices_list[i]][:size_of_pruned_set_list[i]] for i in range(len(normalized_scores_list))]
+        else:
+            valid_actions_list =  [np.asarray(valid_actions_list[i])[reduced_actions_positions_list[i]] for i in range(len(valid_actions_list))]
+            cosine_similarities_list =  [np.asarray(cosine_similarities_list[i])[reduced_actions_positions_list[i]] for i in range(len(cosine_similarities_list))]
+            normalized_scores_list =  [np.asarray(normalized_scores_list[i])[reduced_actions_positions_list[i]] for i in range(len(normalized_scores_list))]
+
 
     # valid_ids = [agent.encode(info['valid']) for info in infos]
 
     valid_ids = [agent.encode(valid_actions) for valid_actions in valid_actions_list]
+
+
     for step in range(1, max_steps+1):
         stepsFunctional = step * envs.num_envs
+
+        assert len(cosine_similarities_list) == len(valid_actions_list) == len(normalized_scores_list) == len(valid_ids)
+
+        for i in range(len(valid_ids)):
+            assert len(valid_ids[i]) == len(valid_actions_list[i])
+
 
         # Summary statistics
         print("-------------------")
@@ -221,6 +264,7 @@ def train(agent, envs, max_steps, update_freq, eval_freq, checkpoint_freq, log_f
         else:
             action_ids, action_idxs, _ = agent.act(states = states, poss_acts = valid_ids, poss_acts_cosine_sim_scores= cosine_similarities_list)
 
+        
         action_strs = [valid_actions[idx] for valid_actions, idx in zip(valid_actions_list, action_idxs)]        
         # Cosine sim of the action taken
         cosine_similarity_action_taken = [cosine_similarities[idx] for cosine_similarities, idx in zip(cosine_similarities_list, action_idxs)]
@@ -256,7 +300,7 @@ def train(agent, envs, max_steps, update_freq, eval_freq, checkpoint_freq, log_f
         next_cosine_similarities_list, next_normalized_scores_list, next_desc_sorting_indices_list, next_size_of_pruned_set_list = zip(*next_action_scores_list)
     
 
-        # While storing in the buffer use all the next actions even when args.pruning_strategy == 'hard'
+        # While storing in the buffer use all the next actions even when args.pruning_strategy == 'hard'. This is because we are trying to estimate Q(s,a)
         next_valids = [agent.encode(valid_actions) for valid_actions in next_valid_actions_list]
         for state, act, act_cosine_sim, rew, next_state, valids,valids_cosine_sim, done in \
             zip(states, action_ids, cosine_similarity_action_taken, rewards, next_states, next_valids, next_cosine_similarities_list, dones):
@@ -264,11 +308,27 @@ def train(agent, envs, max_steps, update_freq, eval_freq, checkpoint_freq, log_f
             agent.observe(state, act, rew, next_state, valids, done, act_cosine_sim, valids_cosine_sim)
 
         # Now prune the next actions
-        if args.pruning_strategy == 'hard':
-            # Prepare reduced lists and make sure the mapping for scores are also updated.
-            next_valid_actions_list =  [np.asarray(next_valid_actions_list[i])[next_desc_sorting_indices_list[i]][:next_size_of_pruned_set_list[i]] for i in range(len(next_cosine_similarities_list))]
-            next_cosine_similarities_list =  [np.asarray(next_cosine_similarities_list[i])[next_desc_sorting_indices_list[i]][:next_size_of_pruned_set_list[i]] for i in range(len(next_cosine_similarities_list))]
-            next_normalized_scores_list =  [np.asarray(next_normalized_scores_list[i])[next_desc_sorting_indices_list[i]][:next_size_of_pruned_set_list[i]] for i in range(len(next_normalized_scores_list))]
+        random_number = np.random.uniform()
+        args.current_epsilon = ((1 - args.starting_epsilon)/(max_steps))*step + args.starting_epsilon 
+
+        if args.pruning_strategy == 'hard' and random_number > args.current_epsilon:
+
+            if args.prune_navigation_action:
+                # Prepare reduced lists and make sure the mapping for scores are also updated.
+                next_valid_actions_list =  [np.asarray(next_valid_actions_list[i])[next_desc_sorting_indices_list[i]][:next_size_of_pruned_set_list[i]] for i in range(len(next_valid_actions_list))]
+                next_cosine_similarities_list =  [np.asarray(next_cosine_similarities_list[i])[next_desc_sorting_indices_list[i]][:next_size_of_pruned_set_list[i]] for i in range(len(next_cosine_similarities_list))]
+                next_normalized_scores_list =  [np.asarray(next_normalized_scores_list[i])[next_desc_sorting_indices_list[i]][:next_size_of_pruned_set_list[i]] for i in range(len(next_normalized_scores_list))]
+            
+            else:
+                # Prevent navigation actions from being pruned
+                next_navigation_action_positions_list = [get_navigation_action_positions(next_valid_actions) for next_valid_actions in next_valid_actions_list]
+                next_reduced_actions_positions_list = [np.asarray(list(set(next_navigation_action_positions_list[i]).union(next_desc_sorting_indices_list[i][:next_size_of_pruned_set_list[i]]))) for i in range(len(next_navigation_action_positions_list))]
+
+                next_valid_actions_list =  [np.asarray(next_valid_actions_list[i])[next_reduced_actions_positions_list[i]] for i in range(len(next_valid_actions_list))]
+                next_cosine_similarities_list =  [np.asarray(next_cosine_similarities_list[i])[next_reduced_actions_positions_list[i]] for i in range(len(next_cosine_similarities_list))]
+                next_normalized_scores_list =  [np.asarray(next_normalized_scores_list[i])[next_reduced_actions_positions_list[i]] for i in range(len(next_normalized_scores_list))]
+
+            next_valids = [agent.encode(valid_actions) for valid_actions in next_valid_actions_list]
 
 
         # Update x with next_x 
@@ -278,6 +338,10 @@ def train(agent, envs, max_steps, update_freq, eval_freq, checkpoint_freq, log_f
         task_description_list = next_task_description_list
         cosine_similarities_list = next_cosine_similarities_list
         normalized_scores_list = next_normalized_scores_list
+
+        for i in range(len(valid_ids)):
+            assert len(valid_ids[i]) == len(valid_actions_list[i])
+
 
 
         if step % log_freq == 0:            
@@ -332,13 +396,22 @@ def train(agent, envs, max_steps, update_freq, eval_freq, checkpoint_freq, log_f
             action_scores_list = map(action_ranker_obj.score_actions, valid_actions_list, task_description_list)
             cosine_similarities_list, normalized_scores_list, desc_sorting_indices_list, size_of_pruned_set_list = zip(*action_scores_list)
             
-            if args.pruning_strategy == 'hard':
-                # Prepare reduced lists and make sure the mapping for scores are also updated.
-                valid_actions_list =  [np.asarray(valid_actions_list[i])[desc_sorting_indices_list[i]][:size_of_pruned_set_list[i]] for i in range(len(cosine_similarities_list))]
-                cosine_similarities_list =  [np.asarray(cosine_similarities_list[i])[desc_sorting_indices_list[i]][:size_of_pruned_set_list[i]] for i in range(len(cosine_similarities_list))]
-                normalized_scores_list =  [np.asarray(normalized_scores_list[i])[desc_sorting_indices_list[i]][:size_of_pruned_set_list[i]] for i in range(len(normalized_scores_list))]
+            navigation_action_positions_list = [get_navigation_action_positions(valid_actions) for valid_actions in valid_actions_list]
+            reduced_actions_positions_list = [np.asarray(list(set(navigation_action_positions_list[i]).union(desc_sorting_indices_list[i][:size_of_pruned_set_list[i]]))) for i in range(len(navigation_action_positions_list))]
 
-            # valid_ids = [agent.encode(info['valid']) for info in infos]
+            random_number = np.random.uniform()
+
+            if args.pruning_strategy == 'hard' and random_number > args.current_epsilon:
+                # Prepare reduced lists and make sure the mapping for scores are also updated.
+                if args.prune_navigation_action:
+                    valid_actions_list =  [np.asarray(valid_actions_list[i])[desc_sorting_indices_list[i]][:size_of_pruned_set_list[i]] for i in range(len(valid_actions_list))]
+                    cosine_similarities_list =  [np.asarray(cosine_similarities_list[i])[desc_sorting_indices_list[i]][:size_of_pruned_set_list[i]] for i in range(len(cosine_similarities_list))]
+                    normalized_scores_list =  [np.asarray(normalized_scores_list[i])[desc_sorting_indices_list[i]][:size_of_pruned_set_list[i]] for i in range(len(normalized_scores_list))]
+                else:
+                    valid_actions_list =  [np.asarray(valid_actions_list[i])[reduced_actions_positions_list[i]] for i in range(len(valid_actions_list))]
+                    cosine_similarities_list =  [np.asarray(cosine_similarities_list[i])[reduced_actions_positions_list[i]] for i in range(len(cosine_similarities_list))]
+                    normalized_scores_list =  [np.asarray(normalized_scores_list[i])[reduced_actions_positions_list[i]] for i in range(len(normalized_scores_list))]
+
 
             valid_ids = [agent.encode(valid_actions) for valid_actions in valid_actions_list]
 
@@ -387,15 +460,19 @@ def parse_args():
     parser.add_argument('--embedding_server_port', default=12345, type=int)
     parser.add_argument('--threshold_strategy', default='similarity_threshold', type = str) # Must be one of similarity_threshold, top_k, top_p 
     parser.add_argument('--threshold_file', default='threshold_file_similarity_threshold.json', type = str)
-    parser.add_argument('--pruning_strategy', default='soft', type = str) # Must be one of 'soft' or 'hard. Will use epsilon exploration strategy with 'hard' pruning.  
+    parser.add_argument('--pruning_strategy', default='soft', type = str) # Must be one of 'soft' or 'hard. Will use epsilon exploration strategy with 'hard' pruning.  \
+    parser.add_argument('--starting_epsilon', default=0.1, type = float) # Parameter which decides proportion of steps when actions are not pruned to enable agent to come out of fixed positions. 
+    parser.add_argument('--epsilon_schedule', default='increasing', type = str) # Must be one of 'fixed', 'increasing' 
+    parser.add_argument('--prune_navigation_action', action='store_true')
+    parser.add_argument('--no-prune_navigation_action', dest='prune_navigation_action', action='store_false')
     return parser.parse_args()
-
-
 
 def main():
     ## assert jericho.__version__ == '2.1.0', "This code is designed to be run with Jericho version 2.1.0."
     args = parse_args()
-    print(args)
+    # Add current_epsilon.  Will only be used by the hard pruner
+    args.current_epsilon = args.starting_epsilon
+
     configure_logger(args.output_dir)    
     agent = DRRN_Agent(args)
 

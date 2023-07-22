@@ -11,7 +11,7 @@ import random
 
 from scienceworld import ScienceWorldEnv, BufferedHistorySaver
 from vec_env import resetWithVariation, resetWithVariationDev, resetWithVariationTest, initializeEnv, sanitizeInfo, sanitizeObservation
-
+import numpy as np
 
 def configure_logger(log_dir):
     logger.configure(log_dir, format_strs=['log'])
@@ -270,7 +270,6 @@ def parse_args():
     parser.add_argument('--historySavePrefix', default='saveout', type=str)
 
     parser.add_argument('--eval_set', default='dev', type=str)      # 'dev' or 'test'
-
     parser.add_argument('--simplification_str', default='', type=str)
 
     return parser.parse_args()

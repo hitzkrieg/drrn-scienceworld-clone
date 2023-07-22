@@ -14,7 +14,7 @@ from scienceworld import ScienceWorldEnv, BufferedHistorySaver
 from vec_env_limit_actions_to_gold import resetWithVariation, resetWithVariationDev, resetWithVariationTest, initializeEnv, sanitizeInfo, sanitizeObservation
 
 # Load the gold actions set dict
-filenameIn = "/home/hgolchha_umass_edu/ScienceWorld/goldpaths/gold_action_set_cumulative.json"
+filenameIn = "/home/hgolchha_umass_edu/ScienceWorld-fresh-install/ScienceWorld/goldpaths/gold_action_set_cumulative.json"
 f = open(filenameIn)
 gold_actions_set_dict_cumulative = json.load(f)
 
@@ -330,7 +330,6 @@ def parse_args():
     parser.add_argument('--historySavePrefix', default='saveout', type=str)
 
     parser.add_argument('--eval_set', default='dev', type=str)      # 'dev' or 'test'
-
     parser.add_argument('--simplification_str', default='', type=str)
 
     return parser.parse_args()

@@ -36,7 +36,7 @@ class ActionScorer():
         # if threshold_strategy == 'top_k', top k actions are returned  
         # if threshold_strategy == 'top_p', Top Actions are returned such that their cumulative probability adds upto p = threshold. Probabilities of actions are calculated by softmax(scores/temperature) 
 
-        if self.pruning_strategy == 'hard':
+        if self.pruning_strategy == 'hard' or self.pruning_strategy == 'hybrid':
             if self.threshold_strategy!= 'top_k':
                 # be a little conservative by increasing threshold by 0.1
                 self.threshold = self.load_threshold(threshold_file) + 0.1
