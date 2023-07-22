@@ -133,21 +133,22 @@ def evaluate_episode(agent, env, env_step_limit, simplificationStr, bufferedHist
 
         random_number = np.random.uniform()
 
-        if args.pruning_strategy == 'hard' and random_number > args.current_epsilon:
+        if args.pruning_strategy in ['hard', 'hybrid'] and random_number > args.current_epsilon:
             if args.prune_navigation_action:
                 # valid_acts
                 valid_acts = np.asarray(valid_acts)[desc_sorting_indices][:size_of_pruned_set]
+                cosine_similarities = np.asarray(cosine_similarities)[desc_sorting_indices][:size_of_pruned_set]
             else:
                 navigation_action_positions = get_navigation_action_positions(valid_acts)
                 reduced_actions_positions = np.asarray(list(set(navigation_action_positions).union(desc_sorting_indices[:size_of_pruned_set])))
                 valid_acts = np.asarray(valid_acts)[reduced_actions_positions]
-
+                cosine_similarities = np.asarray(cosine_similarities)[reduced_actions_positions]
 
         
-        # Note: when args.pruning_strategy == 'hard', the values of cosine_similarities, normalized_scores, desc_sorting_indices have not been updated to a smaller length
+        # Note: when args.pruning_strategy == 'hard', the values of normalized_scores, desc_sorting_indices have not been updated to a smaller length
 
         valid_ids = agent.encode(valid_acts)
-        if args.pruning_strategy == 'soft':
+        if args.pruning_strategy in ['soft', 'hybrid']:
             _, action_idx, action_values = agent.act(states = [state], poss_acts = [valid_ids], poss_acts_cosine_sim_scores = [cosine_similarities], sample=False)        
         else:
             _, action_idx, action_values = agent.act(states = [state], poss_acts = [valid_ids], sample=False)        
@@ -221,7 +222,7 @@ def train(agent, envs, max_steps, update_freq, eval_freq, checkpoint_freq, log_f
 
     random_number = np.random.uniform()
 
-    if args.pruning_strategy == 'hard' and random_number > args.current_epsilon:
+    if args.pruning_strategy in ['hard', 'hybrid'] and random_number > args.current_epsilon:
         # Prepare reduced lists and make sure the mapping for scores are also updated.
         if args.prune_navigation_action:
             valid_actions_list =  [np.asarray(valid_actions_list[i])[desc_sorting_indices_list[i]][:size_of_pruned_set_list[i]] for i in range(len(valid_actions_list))]
@@ -261,6 +262,7 @@ def train(agent, envs, max_steps, update_freq, eval_freq, checkpoint_freq, log_f
 
         if args.pruning_strategy == 'hard':
             action_ids, action_idxs, _ = agent.act(states = states, poss_acts = valid_ids)
+        # when args.pruning_strategy in ['soft', 'hybrid']
         else:
             action_ids, action_idxs, _ = agent.act(states = states, poss_acts = valid_ids, poss_acts_cosine_sim_scores= cosine_similarities_list)
 
@@ -460,7 +462,7 @@ def parse_args():
     parser.add_argument('--embedding_server_port', default=12345, type=int)
     parser.add_argument('--threshold_strategy', default='similarity_threshold', type = str) # Must be one of similarity_threshold, top_k, top_p 
     parser.add_argument('--threshold_file', default='threshold_file_similarity_threshold.json', type = str)
-    parser.add_argument('--pruning_strategy', default='soft', type = str) # Must be one of 'soft' or 'hard. Will use epsilon exploration strategy with 'hard' pruning.  \
+    parser.add_argument('--pruning_strategy', default='soft', type = str) # Must be one of 'soft', 'hard' or 'hybrid'. Will use epsilon exploration strategy with 'hard' pruning.  \
     parser.add_argument('--starting_epsilon', default=0.1, type = float) # Parameter which decides proportion of steps when actions are not pruned to enable agent to come out of fixed positions. 
     parser.add_argument('--epsilon_schedule', default='increasing', type = str) # Must be one of 'fixed', 'increasing' 
     parser.add_argument('--prune_navigation_action', action='store_true')

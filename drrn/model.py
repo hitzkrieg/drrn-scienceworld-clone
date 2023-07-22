@@ -19,7 +19,7 @@ class DRRN(torch.nn.Module):
         Deep Reinforcement Relevance Network - He et al. '16
 
     """
-    def __init__(self, vocab_size, embedding_dim, hidden_dim, use_soft_pruner = False):
+    def __init__(self, vocab_size, embedding_dim, hidden_dim, use_soft_or_hard_pruner = False):
         super(DRRN, self).__init__()
         self.embedding    = nn.Embedding(vocab_size, embedding_dim)
         self.obs_encoder  = nn.GRU(embedding_dim, hidden_dim)
@@ -27,8 +27,8 @@ class DRRN(torch.nn.Module):
         self.inv_encoder  = nn.GRU(embedding_dim, hidden_dim)
         self.act_encoder  = nn.GRU(embedding_dim, hidden_dim)
         self.hidden       = nn.Linear(4*hidden_dim, hidden_dim)
-        self.use_soft_pruner = use_soft_pruner
-        if self.use_soft_pruner:
+        self.use_soft_or_hard_pruner = use_soft_or_hard_pruner
+        if self.use_soft_or_hard_pruner:
             # self.act_rescorer = torch.nn.Sequential(torch.nn.Linear(hidden_dim,1), torch.nn.Sigmoid())
             self.act_rescorer = nn.Sequential(nn.Linear(2,2), nn.ReLU(), nn.Linear(2,1))
 
@@ -91,7 +91,7 @@ class DRRN(torch.nn.Module):
         z = torch.cat((state_out, act_out), dim=1) # Concat along hidden_dim
         z = F.relu(self.hidden(z))
         act_values = self.act_scorer(z).squeeze(-1)
-        if self.use_soft_pruner:
+        if self.use_soft_or_hard_pruner:
             # rescore_weights = self.act_rescorer(z).squeeze(-1)
             # return act_values.split(act_sizes), rescore_weights.split(act_sizes)
             predicted_act_values = act_values.split(act_sizes)
@@ -107,10 +107,10 @@ class DRRN(torch.nn.Module):
         """ Returns an action-string, optionally sampling from the distribution
             of Q-Values.
         """
-        if self.use_soft_pruner and not act_cosine_sim_scores:
+        if self.use_soft_or_hard_pruner and not act_cosine_sim_scores:
             raise NotImplementedError()
 
-        if not self.use_soft_pruner:        
+        if not self.use_soft_or_hard_pruner:        
             act_values = self.forward(states, act_ids)
         else:
             act_values = self.forward(states, act_ids, act_cosine_sim_scores)

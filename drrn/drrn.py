@@ -53,11 +53,11 @@ class DRRN_Agent:
         self.sp = spm.SentencePieceProcessor()
         self.sp.Load(args.spm_path)
         if hasattr(args, 'pruning_strategy'):
-            self.use_soft_pruner = args.pruning_strategy == 'soft'
+            self.use_soft_or_hybrid_pruner = args.pruning_strategy in ['soft', 'hybrid']
         else:
-            self.use_soft_pruner = False
+            self.use_soft_or_hybrid_pruner = False
 
-        self.network = DRRN(len(self.sp), args.embedding_dim, args.hidden_dim, self.use_soft_pruner).to(device)
+        self.network = DRRN(len(self.sp), args.embedding_dim, args.hidden_dim, self.use_soft_or_hybrid_pruner).to(device)
         ## self.memory = ReplayMemory(args.memory_size)     ## PJ: Changing to more memory efficient memory, since the pickle files are enormous
         self.memory = PrioritizedReplayMemory(capacity = args.memory_size, priority_fraction = args.priority_fraction)     ## PJ: Changing to more memory efficient memory, since the pickle files are enormous
         self.save_path = args.output_dir
@@ -99,7 +99,7 @@ class DRRN_Agent:
 
     def act(self, states, poss_acts, poss_acts_cosine_sim_scores = None, sample=True):
         """ Returns a string action from poss_acts. """
-        if not self.use_soft_pruner and poss_acts_cosine_sim_scores:
+        if not self.use_soft_or_hybrid_pruner and poss_acts_cosine_sim_scores:
             raise NotImplementedError()
         
         idxs, values = self.network.act(states, poss_acts, poss_acts_cosine_sim_scores, sample)
