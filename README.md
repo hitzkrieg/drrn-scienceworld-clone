@@ -1,22 +1,33 @@
-# DRRN Agent (Modified for ScienceWorld)
+# DRRN Agent with Pruning for ScienceWorld
 
 This repository contains a reference implementation DRRN as mentioned in [Interactive Fiction Games: A Colossal Adventure](https://arxiv.org/abs/1909.05398), that has been modified for use with the [ScienceWorld](https://www.github.com/allenai/ScienceWorld) environment. 
+
+Also, it has additional scripts to be used with a Pruner (a Language Model which learns an embedding space to align actions with task description)
 
 
 # Quickstart
 
 Install Dependencies:
 ```bash
-# Clone repository
-git clone https://github.com/cognitiveailab/drrn-scienceworld.git
-cd drrn-scienceworld
+
 
 # Create conda environment
 conda create --name drrn1 python=3.8
 conda activate drrn1
-pip install -r requirements.txt
-
+pip install -r requirements_new.txt
 ```
+
+You can work in my directory if working from unity
+```
+cd /project/pi_mccallum_umass_edu/hgolchha_umass_edu/drrn-scienceworld-fresh-install/drrn-scienceworld/drrn/ 
+```
+
+Else clone
+```
+git clone https://github.com/hitzkrieg/drrn-scienceworld-clone.git
+```
+
+
 
 An example of training the DRRN model (using 8 threads, for 10k training steps, evaluating on dev every 1k steps):
 ```bash
@@ -73,26 +84,42 @@ TASK LIST:
 # Hardware requirements
 This code generally runs best with at least num_threads+1 CPU cores (e.g. about 10 cores for an 8-thread environment).
 
-The GPU memory requirements are variable, but generally stay below 8gb. 
-
 
 # Known issues
-
 - *Many threads*: If you are attempting to use a large number of threads (e.g. 20+), you may need to add an additional several-second delay after the threads spawn before the rest of the program runs.  (The ScienceWorld API already adds a 5 second delay, which handles small numbers of threads well.) 
 
 - *Model saving with manys steps*: Very occassionally, on very long runs (generally 1M+ steps), the periodic pickling the model when saving checkpoints runs into issues and freezes.  The cause is unknown, but as a workaround the save has been wrapped in a timeout, so that if it takes longer than 2 minutes to save the model, the checkpoint is not saved and training continues.  Subsequent checkpoints usually save without issue.
 
+- *Sometimes there are issues in logging (haven't debug yet)*
 
-# Citing
+# Our Experiments
 
-If this DRRN agent is helpful in your work, please cite the following:
+# Experiment Folders
+There are the following directories, one for each experiment. Each directory has folders drrn-task-{idx}-test, idx=0-29. 
+See make_dirs.py
 
-```
-@article{hausknecht19colossal,
-  title={Interactive Fiction Games: A Colossal Adventure},
-  author={Matthew Hausknecht and Prithviraj Ammanabrolu and Marc-Alexandre C{\^{o}}t{\'{e}} and Xingdi Yuan},
-  journal={CoRR},
-  year={2019},
-  volume={abs/1909.05398}
-}
-```
+1. `logs_easy_100k`: Rerunning the original baseline
+2. `logs_easy_limit_actions_to_gold_100k` : DRRN agent with actions limited to actions from gold trajectory for that  variation
+3. `logs_easy_limit_actions_to_gold_100k_v2`: DRRN agent with actions limited to actions from all gold actions of the task (across variations)
+4. `logs_easy_limit_actions_to_gold_100k_v2_sparse`:  DRRN agent with actions limited to actions from all gold actions of the task (across variations), and without intermediate / negative rewards
+5. `logs_easy_limit_actions_by_pruner_hard_top_50_epsilon_fixed_navigation_100k`: Hard pruner, topk k=50, epsilon=0.1 (fixed)
+6. `logs_easy_limit_actions_by_pruner_hard_top_50_epsilon_inc_navigation_100k` :  Hard pruner, topk k=50, epsilon=0.1 (fixed). Has two more folders for reruns (_2 and _3)
+7. `logs_easy_limit_actions_by_pruner_soft_100k`: Soft pruner, architecture v1, Has two more folders for reruns (_2 and _3)
+8. `logs_easy_limit_actions_by_pruner_soft_scaled_100k`: Soft pruner, architecture v1, cosine_rescaling_factor=100
+9. `logs_easy_limit_actions_by_pruner_soft_v2_100k`: Soft pruner, architecture v2, cosine_rescaling_factor=100
+10. `logs_easy_limit_actions_by_pruner_soft_v2_normalized_100k`: Soft pruner, architecture v2, cosine_rescaling_factor=100, cosine scores normalized across actions
+11. `logs_easy_limit_actions_by_pruner_hybrid_top_50_epsilon_inc_navigation_100k_`{idx}: hybrid pruner, soft pruner architecture = v1, cosine_rescaling_factor=100
+12. `logs_easy_limit_actions_by_pruner_hybrid_v2_top_50_epsilon_inc_navigation_100k`: hybrid pruner, soft pruner architecture = v2, cosine_rescaling_factor=100
+
+# Path to sbatch scripts
+See `drrn/sbatch_scripts/reference_scripts` for the sbatch scripts used for the experiments
+You need to change the task number at 7 locations (hopefully you don't miss out)
+
+To reduce effort, I wrote Python scripts (for two experiments - hard fixed and inc epsilon) where you can edit some fields and generate the sbatch scripts automatically. You can create one for other experiments as well using it and script from reference_scripts. They are in the path `drrn/sbatch_scripts/auto_generate_scripts/script_generators`. The scripts get generated in the folder  `drrn/sbatch_scripts/auto_generate_scripts/auto_generated_scripts`
+
+
+
+
+
+
+
