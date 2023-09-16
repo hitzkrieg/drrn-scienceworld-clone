@@ -1,7 +1,8 @@
 """
 Usage:
-python train-scienceworld-limit-actions-by-pruner.py --num_envs=8 --max_steps=100000 --task_idx=10  --priority_fraction=0.50 --memory_size=100000 --simplification_str=easy --env_step_limit=100 --eval_freq=1000 --eval_set=test --output_dir=logs_easy_temp/drrn-task-10-test --historySavePrefix=logs_easy_temp/drrn-task-10-test/drrn-task10-results-seed0-test --embedding_server_port 12345 --threshold_strategy top_k --threshold_file threshold.json --pruning_strategy soft
 
+python train-scienceworld-limit-actions-by-pruner-corrected-next-actions.py --num_envs=8 --max_steps=100000 --task_idx=10  --priority_fraction=0.50 --memory_size=100000 --simplification_str=easy --env_step_limit=100 --eval_freq=1000 --eval_set=test --output_dir=logs_easy_temp/drrn-task-10-test --historySavePrefix=logs_easy_temp/drrn-task-10-test/drrn-task10-results-seed0-test --embedding_server_port 12345 --threshold_strategy top_k --threshold_file threshold.json --pruning_strategy soft
+This corrects the choice of next actions is sent to the DRRN loss. This should be the reduced set of actions after pruning. 
 
 -- Protobuf issue and resolution:
     I had faced an issue with the protobuf versions. 
@@ -37,7 +38,6 @@ from drrn import DRRN_Agent
 from vec_env import VecEnv
 import random
 import json
-from scipy.special import softmax
 
 from scienceworld import ScienceWorldEnv, BufferedHistorySaver
 from vec_env import resetWithVariation, resetWithVariationDev, resetWithVariationTest, initializeEnv, sanitizeInfo, sanitizeObservation
@@ -145,8 +145,6 @@ def evaluate_episode(agent, env, env_step_limit, simplificationStr, bufferedHist
                 valid_acts = np.asarray(valid_acts)[reduced_actions_positions]
                 cosine_similarities = np.asarray(cosine_similarities)[reduced_actions_positions]
 
-        if args.normalize_action_scores:
-            cosine_similarities = normalize_list(cosine_similarities)
         
         # Note: when args.pruning_strategy == 'hard', the values of normalized_scores, desc_sorting_indices have not been updated to a smaller length
 
@@ -197,10 +195,6 @@ def evaluate_episode(agent, env, env_step_limit, simplificationStr, bufferedHist
 
     return info['score']
 
-def normalize_list(scores, temperature=1):
-    normalized_scores = softmax(scores / temperature)
-    return normalized_scores
-
 
 def train(agent, envs, max_steps, update_freq, eval_freq, checkpoint_freq, log_freq, args, bufferedHistorySaverTrain, bufferedHistorySaverEval, action_ranker_obj):
     startTime = time.time()
@@ -242,9 +236,6 @@ def train(agent, envs, max_steps, update_freq, eval_freq, checkpoint_freq, log_f
 
 
     # valid_ids = [agent.encode(info['valid']) for info in infos]
-
-    if args.normalize_action_scores:
-        cosine_similarities_list = [np.asarray(normalize_list(cosine_similarities_list[i])) for i in range(len(cosine_similarities_list))]
 
     valid_ids = [agent.encode(valid_actions) for valid_actions in valid_actions_list]
 
@@ -342,9 +333,6 @@ def train(agent, envs, max_steps, update_freq, eval_freq, checkpoint_freq, log_f
 
             next_valids = [agent.encode(valid_actions) for valid_actions in next_valid_actions_list]
 
-        if args.normalize_action_scores:
-            next_cosine_similarities_list = [np.asarray(normalize_list(next_cosine_similarities_list[i])) for i in range(len(next_cosine_similarities_list))]
-
 
         # Update x with next_x 
         states = next_states
@@ -427,8 +415,6 @@ def train(agent, envs, max_steps, update_freq, eval_freq, checkpoint_freq, log_f
                     cosine_similarities_list =  [np.asarray(cosine_similarities_list[i])[reduced_actions_positions_list[i]] for i in range(len(cosine_similarities_list))]
                     normalized_scores_list =  [np.asarray(normalized_scores_list[i])[reduced_actions_positions_list[i]] for i in range(len(normalized_scores_list))]
 
-            if args.normalize_action_scores:
-                cosine_similarities_list = [np.asarray(normalize_list(cosine_similarities_list[i])) for i in range(len(cosine_similarities_list))]
 
             valid_ids = [agent.encode(valid_actions) for valid_actions in valid_actions_list]
 
@@ -482,8 +468,6 @@ def parse_args():
     parser.add_argument('--epsilon_schedule', default='increasing', type = str) # Must be one of 'fixed', 'increasing' 
     parser.add_argument('--prune_navigation_action', action='store_true')
     parser.add_argument('--no-prune_navigation_action', dest='prune_navigation_action', action='store_false')
-    parser.add_argument('--normalize_action_scores', action='store_true')
-
     return parser.parse_args()
 
 def main():

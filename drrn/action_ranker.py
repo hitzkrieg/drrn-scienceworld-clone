@@ -30,7 +30,7 @@ class ActionScorer():
         self.pruning_strategy = pruning_strategy
         self.threshold_strategy = threshold_strategy
         # TO DO: replace by the temperature used in training the embeddings
-        self.temperature = 100
+        self.temperature = 1
 
         # if threshold_strategy == 'similarity_threshold', threshold is the minimum admissable cosine similarity, and all actions having similarity greater than threshold are returned 
         # if threshold_strategy == 'top_k', top k actions are returned  
