@@ -19,7 +19,7 @@ class DRRN(torch.nn.Module):
         Deep Reinforcement Relevance Network - He et al. '16
 
     """
-    def __init__(self, vocab_size, embedding_dim, hidden_dim, use_soft_or_hybrid_pruner = False, soft_scorer_type=2):
+    def __init__(self, vocab_size, embedding_dim, hidden_dim, use_soft_or_hybrid_pruner = False, soft_scorer_type=2, cosine_rescaling_factor=100.0):
         super(DRRN, self).__init__()
         self.embedding    = nn.Embedding(vocab_size, embedding_dim)
         self.obs_encoder  = nn.GRU(embedding_dim, hidden_dim)
@@ -32,7 +32,6 @@ class DRRN(torch.nn.Module):
 
         if self.use_soft_or_hybrid_pruner:
             # self.act_rescorer = torch.nn.Sequential(torch.nn.Linear(hidden_dim,1), torch.nn.Sigmoid())
-            self.cosine_rescaling_factor = 100.0
             if self.soft_scorer_type == 1:
                 self.act_rescorer = nn.Sequential(nn.Linear(2,2), nn.ReLU(), nn.Linear(2,1))
             else:

@@ -22,8 +22,6 @@ python train-scienceworld-limit-actions-by-pruner.py --num_envs=8 --max_steps=10
 
     4. Copy builder.py from (let's say 'Documents') to Lib/site-packages/google/protobuf/internal
     5. Run your code
-
-
 """
 
 import subprocess
@@ -477,12 +475,14 @@ def parse_args():
     parser.add_argument('--embedding_server_port', default=12345, type=int)
     parser.add_argument('--threshold_strategy', default='similarity_threshold', type = str) # Must be one of similarity_threshold, top_k, top_p 
     parser.add_argument('--threshold_file', default='threshold_file_similarity_threshold.json', type = str)
-    parser.add_argument('--pruning_strategy', default='soft', type = str) # Must be one of 'soft', 'hard' or 'hybrid'. Will use epsilon exploration strategy with 'hard' pruning.  \
+    parser.add_argument('--pruning_strategy', default='soft', type = str) # Must be one of 'soft', 'hard' or 'hybrid'. Will use epsilon exploration strategy with 'hard' pruning.  
     parser.add_argument('--starting_epsilon', default=0.1, type = float) # Parameter which decides proportion of steps when actions are not pruned to enable agent to come out of fixed positions. 
     parser.add_argument('--epsilon_schedule', default='increasing', type = str) # Must be one of 'fixed', 'increasing' 
     parser.add_argument('--prune_navigation_action', action='store_true')
     parser.add_argument('--no-prune_navigation_action', dest='prune_navigation_action', action='store_false')
-    parser.add_argument('--normalize_action_scores', action='store_true')
+    parser.add_argument('--normalize_action_scores', action='store_true') #By default this is false. 
+    parser.add_argument('--soft_scorer_type', default=2, type=int) # Must be of 1 or 2
+    parser.add_argument('--cosine_rescaling_factor', default=100.0, type=float) # Amount by which cosine scores are scaled up before used by soft scorer
 
     return parser.parse_args()
 

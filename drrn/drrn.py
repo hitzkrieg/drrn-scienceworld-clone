@@ -56,8 +56,12 @@ class DRRN_Agent:
             self.use_soft_or_hybrid_pruner = args.pruning_strategy in ['soft', 'hybrid']
         else:
             self.use_soft_or_hybrid_pruner = False
+        
+        # Parameters related to soft scorer. 
+        self.soft_scorer_type = args.soft_scorer_type
+        self.cosine_rescaling_factor = args.cosine_rescaling_factor
 
-        self.network = DRRN(len(self.sp), args.embedding_dim, args.hidden_dim, self.use_soft_or_hybrid_pruner).to(device)
+        self.network = DRRN(len(self.sp), args.embedding_dim, args.hidden_dim, self.use_soft_or_hybrid_pruner, self.soft_scorer_type, self.cosine_rescaling_factor).to(device)
         ## self.memory = ReplayMemory(args.memory_size)     ## PJ: Changing to more memory efficient memory, since the pickle files are enormous
         self.memory = PrioritizedReplayMemory(capacity = args.memory_size, priority_fraction = args.priority_fraction)     ## PJ: Changing to more memory efficient memory, since the pickle files are enormous
         self.save_path = args.output_dir
