@@ -1,9 +1,10 @@
 """
-Initialize empty folders 
+Usage: python make_dirs.py <dir_to_create>
 """
 import os
+import sys
 
-dir_to_create = 'logs_easy_limit_actions_by_pruner_soft_v2_normalized_100k'
+dir_to_create = sys.argv[1]
 
 if not os.path.exists(dir_to_create):
     os.mkdir(dir_to_create)

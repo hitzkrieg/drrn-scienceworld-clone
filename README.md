@@ -17,7 +17,7 @@ conda activate drrn1
 pip install -r requirements_new.txt
 ```
 
-You can work in my directory if working from unity
+Path to my directory for reference
 ```
 cd /project/pi_mccallum_umass_edu/hgolchha_umass_edu/drrn-scienceworld-fresh-install/drrn-scienceworld/drrn/ 
 ```
@@ -92,11 +92,13 @@ This code generally runs best with at least num_threads+1 CPU cores (e.g. about 
 
 - *Sometimes there are issues in logging (haven't debug yet)*
 
-# Our Experiments
+# Instructions for Our Experiments
 
 # Experiment Folders
 There are the following directories, one for each experiment. Each directory has folders drrn-task-{idx}-test, idx=0-29. 
-See make_dirs.py
+To create these folders use:  `python make_dirs.py /path/to/env_dir` 
+
+Here are some environment folders in /project/pi_mccallum_umass_edu/hgolchha_umass_edu/drrn-scienceworld-fresh-install/drrn-scienceworld/drrn/: 
 
 1. `logs_easy_100k`: Rerunning the original baseline
 2. `logs_easy_limit_actions_to_gold_100k` : DRRN agent with actions limited to actions from gold trajectory for that  variation
@@ -118,7 +120,7 @@ You need to change the task number at 7 locations (hopefully you don't miss out)
 To reduce effort, I wrote Python scripts (for two experiments - hard fixed and inc epsilon) where you can edit some fields and generate the sbatch scripts automatically. You can create one for other experiments as well using it and script from reference_scripts. They are in the path `drrn/sbatch_scripts/auto_generate_scripts/script_generators`. The scripts get generated in the folder  `drrn/sbatch_scripts/auto_generate_scripts/auto_generated_scripts`
 
 
-
+# The sbatch files call
 
 
 
