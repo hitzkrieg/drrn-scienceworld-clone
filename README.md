@@ -27,6 +27,37 @@ Else clone
 git clone https://github.com/hitzkrieg/drrn-scienceworld-clone.git
 ```
 
+Also install SimCSE-for-action-pruning at some directory 
+```
+git clone https://github.com/hitzkrieg/SimCSE-for-action-pruning.git
+```
+My directory is here: /home/hgolchha_umass_edu/SimCSE
+
+Follow instructions in it to install conda environment (simcse) and download pretrained weights for the embedding model (to be added)
+
+Note: I had some issue with the protobuf version in the conda env drrn1. It is used by gRPC, which is being used to comminucate with the embedding server from drrrn (to get embeddings of a list of actions / task description). Here is the resolution:
+
+1. Activate drrn1
+2. Uninstall protobuf
+3. Install the protobuf version from simcse / latest protobuf
+pip install --upgrade protobuf
+4. Find folder to site-packages:
+python -c "import site; print(site.getsitepackages())"
+
+For me it is : /home/hgolchha_umass_edu/anaconda3/envs/drrn1/lib/python3.8/site-packages
+5. Copy builder.py from .../..../site-packages/google/protobuf/internal to another folder  (let's say 'Documents')
+6. Install a protobuf version that is compatible with this project ( 3.19.4)
+    pip install protobuf==3.19.4
+7. Copy builder.py from (let's say 'Documents') to .../..../site-packages/google/protobuf/internal
+
+
+Add some enviornment variables:
+This project/drrn:
+```export DRRN_HOME=/project/pi_mccallum_umass_edu/hgolchha_umass_edu/drrn-scienceworld-fresh-install/drrn-scienceworld/drrn```
+```export SIMCSE_HOME=/home/hgolchha_umass_edu/SimCSE```
+```export JAVA_HOME=/home/hgolchha_umass_edu/jre1.8.0_341```
+
+
 
 
 An example of training the DRRN model (using 8 threads, for 10k training steps, evaluating on dev every 1k steps):
