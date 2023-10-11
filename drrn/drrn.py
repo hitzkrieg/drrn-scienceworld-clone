@@ -50,6 +50,7 @@ class DRRN_Agent:
     def __init__(self, args):
         self.gamma = args.gamma
         self.batch_size = args.batch_size
+        self.grad_accumulation_steps = args.grad_accumulation_steps
         self.sp = spm.SentencePieceProcessor()
         self.sp.Load(args.spm_path)
         if hasattr(args, 'pruning_strategy'):
@@ -112,37 +113,56 @@ class DRRN_Agent:
 
 
     def update(self):
-        if len(self.memory) < self.batch_size:
+        if len(self.memory) < self.batch_size * self.grad_accumulation_steps:
             return
-
-        transitions = self.memory.sample(self.batch_size)
-        batch = Transition(*zip(*transitions))
-
-        # Compute Q(s', a') for all a'
-        # TODO: Use a target network???
-        next_qvals = self.network(batch.next_state, batch.next_acts, batch.next_acts_cosine_sim)
-        # Take the max over next q-values
-        next_qvals = torch.tensor([vals.max() for vals in next_qvals], device=device)
-        # Zero all the next_qvals that are done
-        next_qvals = next_qvals * (1-torch.tensor(batch.done, dtype=torch.float, device=device))
-        targets = torch.tensor(batch.reward, dtype=torch.float, device=device) + self.gamma * next_qvals
-
-        # Next compute Q(s, a)
-        # Nest each action in a list - so that it becomes the only admissible cmd
-        nested_acts = tuple([[a] for a in batch.act])        
-        nested_acts_cosine_sim = tuple([[act_cosine_sim] for act_cosine_sim in batch.act_cosine_sim])
-        qvals = self.network(batch.state, nested_acts, nested_acts_cosine_sim)
-
-        # Combine the qvals: Maybe just do a greedy max for generality
-        qvals = torch.cat(qvals)
-
-        # Compute Huber loss
-        loss = F.smooth_l1_loss(qvals, targets.detach())
+        final_loss =0
         self.optimizer.zero_grad()
-        loss.backward()
+
+        for self.grad_accumulation_step in range(self.grad_accumulation_steps):
+
+            transitions = self.memory.sample(self.batch_size)
+            batch = Transition(*zip(*transitions))
+
+            # Compute Q(s', a') for all a'
+            # TODO: Use a target network???
+            # try:
+            #     next_qvals = self.network(batch.next_state, batch.next_acts, batch.next_acts_cosine_sim)
+            # except Exception as e:
+            #     print(f"Error in next_qvals")
+            #     print(f"Exception: {e}")
+            #     breakpoint()
+
+            next_qvals = self.network(batch.next_state, batch.next_acts, batch.next_acts_cosine_sim)
+
+            # Take the max over next q-values
+            next_qvals = torch.tensor([vals.max() for vals in next_qvals], device=device)
+            # Zero all the next_qvals that are done
+            next_qvals = next_qvals * (1-torch.tensor(batch.done, dtype=torch.float, device=device))
+            targets = torch.tensor(batch.reward, dtype=torch.float, device=device) + self.gamma * next_qvals
+
+            # Next compute Q(s, a)
+            # Nest each action in a list - so that it becomes the only admissible cmd
+            nested_acts = tuple([[a] for a in batch.act])        
+            nested_acts_cosine_sim = tuple([[act_cosine_sim] for act_cosine_sim in batch.act_cosine_sim])
+            # try:
+            #     qvals = self.network(batch.state, nested_acts, nested_acts_cosine_sim)
+            # except Exception as e:
+            #     print(f"Error in qvals")
+            #     print(f"Exception: {e}")
+            #     breakpoint()
+
+            qvals = self.network(batch.state, nested_acts, nested_acts_cosine_sim)
+
+            # Combine the qvals: Maybe just do a greedy max for generality
+            qvals = torch.cat(qvals)
+
+            # Compute Huber loss
+            loss = F.smooth_l1_loss(qvals, targets.detach())
+            final_loss+= loss.item()
+            loss.backward()
         nn.utils.clip_grad_norm_(self.network.parameters(), self.clip)
         self.optimizer.step()
-        return loss.item()
+        return final_loss
 
 
     def load(self, path, suffixStr=""):

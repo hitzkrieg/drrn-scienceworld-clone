@@ -42,6 +42,7 @@ from vec_env import resetWithVariation, resetWithVariationDev, resetWithVariatio
 from action_ranker import ActionScorer
 import numpy as np 
 import re
+import os
 
 navigation_regex = re.compile(r"(go|teleport)\ to.*")
 
@@ -202,11 +203,14 @@ def normalize_list(scores, temperature=1):
 
 def train(agent, envs, max_steps, update_freq, eval_freq, checkpoint_freq, log_freq, args, bufferedHistorySaverTrain, bufferedHistorySaverEval, action_ranker_obj):
     startTime = time.time()
-    flush_cache_freq = 100
+    flush_cache_freq = 20
+    # flush_cache_freq = 100
+    
 
     #max_steps = int(math.ceil(max_steps / args.num_envs))
     numEpisodes = 0
     stepsFunctional = 0
+    num_update_exeptions = 0
     start1 = timeit.default_timer()
 
 
@@ -374,8 +378,25 @@ def train(agent, envs, max_steps, update_freq, eval_freq, checkpoint_freq, log_f
             print("GPU_mem:         " + str(agent.getMemoryUsage()))
             print("*************************")
 
-        if step % update_freq == 0:            
-            loss = agent.update()            
+        if step % update_freq == 0:
+            try:               
+                loss = agent.update()            
+            except Exception as e:
+                num_update_exeptions+=1
+                print("Exception in agent.update()")
+                print(f"Msg: {e}")
+                print("Current memory usage:")
+                print(os.system('nvidia-smi'))
+
+                agent.clearGPUCache()
+                print("Sleeping for 120 secs")
+                time.sleep(120)
+                agent.clearGPUCache()
+
+                print("Current memory usage:")
+                print(os.system('nvidia-smi'))
+
+                agent.update()
             if loss is not None:
                 tb.logkv_mean('Loss', loss)
 
@@ -437,6 +458,7 @@ def train(agent, envs, max_steps, update_freq, eval_freq, checkpoint_freq, log_f
 
 
     print("Training complete.")
+    print(f"Num of update exceptions: {num_update_exeptions}")
     # Final save
     agent.save("-steps" + str(stepsFunctional) + "-eps" + str(numEpisodes))
     # Close environments
@@ -458,6 +480,8 @@ def parse_args():
     parser.add_argument('--memory_size', default=5000000, type=int)
     parser.add_argument('--priority_fraction', default=0.0, type=float)
     parser.add_argument('--batch_size', default=64, type=int)
+    parser.add_argument('--grad_accumulation_steps', default=1, type=int)
+
     parser.add_argument('--gamma', default=.9, type=float)
     parser.add_argument('--learning_rate', default=0.0001, type=float)
     parser.add_argument('--clip', default=5, type=float)
@@ -489,6 +513,11 @@ def parse_args():
 def main():
     ## assert jericho.__version__ == '2.1.0', "This code is designed to be run with Jericho version 2.1.0."
     args = parse_args()
+    print("Batch size: ")
+    print(args.batch_size)
+    print("grad_acc_steps:")
+    print(args.grad_accumulation_steps)
+
     # Add current_epsilon.  Will only be used by the hard pruner
     args.current_epsilon = args.starting_epsilon
 
